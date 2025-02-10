@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link rel="stylesheet" href="../styles/styles.css">
+    <style>
+        .settings-container {
+            padding: 20px;
+            text-align: center;
+        }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .option-btn {
+            margin: 10px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #notifications {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <button class="close-btn" id="close-btn">&times;</button>
+        <div>
+            <label>
+                <input type="checkbox" id="notifications"> Enable Notifications
+            </label>
+        </div>
+        <button class="option-btn" id="logout-btn">Logout</button>
+    </div>
+
+    <script>
+        // Handle notification toggle
+        document.getElementById('notifications').addEventListener('change', (event) => {
+            console.log('Notifications changed:', event.target.checked);
+            window.api.send('toggle-notifications', event.target.checked);
+        });
+
+        // Logout logic
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            console.log('Logout button clicked');  // Debugging line
+            window.api.send('logout'); // Request logout
+        });
+
+        // Close the small window when close button is clicked
+        document.getElementById('close-btn').addEventListener('click', () => {
+            console.log('Close button clicked');  
+            window.api.send('close-settings-window');
+        });
+    </script>
+</body>
+</html>

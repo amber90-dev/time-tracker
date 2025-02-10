@@ -1,0 +1,6 @@
+.env.local
+.env.uat
+node_modules
+startup.log
+build
+dist

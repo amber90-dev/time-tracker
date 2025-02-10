@@ -1,0 +1,70 @@
+{
+  "name": "alphabizlance-time-tracker",
+  "version": "1.0.0",
+  "description": "Alphabizlance Time Tracker for desktop users.",
+  "main": "src/main.js",
+  "scripts": {
+    "clean": "rimraf dist",
+    "start-local": "cross-env NODE_ENV=local electron .",
+    "start-uat": "cross-env NODE_ENV=uat electron .",
+    "build:local": "cross-env NODE_ENV=local electron-builder",
+    "build:uat": "cross-env NODE_ENV=uat electron-builder",
+    "start": "electron .",
+    "build": "electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.alphabizlance.timetracker",
+    "asar": true,
+    "extraMetadata": {
+      "env": {
+        "NODE_ENV": "uat"
+      }
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "certificateFile": "build/mycert.pfx",
+      "certificatePassword": "123456"
+    },
+    "protocols": [
+      {
+        "name": "Alphabizlance Time Tracker Protocol",
+        "schemes": [
+          "alphatimetracker"
+        ]
+      }
+    ],
+    "files": [
+      "src/**",
+      "node_modules/node-global-key-listener/**",
+      "package.json",
+      "!dist/**/*",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": ".env.uat",
+        "to": "."
+      }
+    ]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "electron-updater": "^6.3.9",
+    "html2canvas": "^1.4.1",
+    "node-fetch": "^3.0.0",
+    "node-global-key-listener": "^0.3.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^31.3.1",
+    "electron-builder": "^25.1.8",
+    "electron-reload": "^2.0.0-alpha.1",
+    "rimraf": "^6.0.1"
+  }
+}
