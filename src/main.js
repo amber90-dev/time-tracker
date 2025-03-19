@@ -27,7 +27,7 @@ const userDataPath = app.getPath('userData');
 const logBuildFilePath = path.join(userDataPath, 'startup.log');
 // const envFilePath = path.join(isPackaged ? process.resourcesPath : __dirname, '../.env.local');
 console.log(process.env.NODE_ENV);
-let API_URL = "https://alphabizlance.com/api"
+let API_URL = "https://titanlance.com/api"
 if(process.env.NODE_ENV === 'development')
     API_URL = "http://alphabizlance.local/api"
 
