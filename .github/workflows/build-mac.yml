@@ -3,12 +3,12 @@ name: Build macOS App
 on:
   push:
     branches:
-      - main  # Jab bhi main branch pe push hoga, yeh trigger hoga
-  workflow_dispatch:  # Manually run karne ka option bhi milega
+      - main
+  workflow_dispatch:
 
 jobs:
   build-mac:
-    runs-on: macos-latest  # macOS machine pe run karega
+    runs-on: macos-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -16,16 +16,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18  # Apne project ke hisaab se Node.js version change karna
+          node-version: 18
 
       - name: Install Dependencies
         run: npm install
 
       - name: Build macOS App
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}  # ✅ Make sure GH_TOKEN is set
         run: npm run build:mac
 
       - name: Upload macOS Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: macOS-app
-          path: dist/*.dmg  # Apni build output location ke hisaab se adjust karna
+          path: dist/*.dmg
