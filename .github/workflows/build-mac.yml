@@ -11,10 +11,10 @@ jobs:
     runs-on: macos-latest  # macOS machine pe run karega
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18  # Apne project ke hisaab se Node.js version change karna
 
