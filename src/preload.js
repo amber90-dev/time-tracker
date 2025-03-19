@@ -64,7 +64,6 @@ contextBridge.exposeInMainWorld('api', {
     openTimesheetUrl: (url) => ipcRenderer.send('open-timesheet-url', url),
     openChatUrl: (url) => ipcRenderer.send('open-chat-url', url),
     // Auto-update methods
-    checkForUpdates: () => ipcRenderer.send('check-for-updates'),
     restartApp: () => ipcRenderer.send('restart-app'),
     onUpdateAvailable: (func) => ipcRenderer.on('update_available', (event, ...args) => func(...args)),
     onUpdateDownloaded: (func) => ipcRenderer.on('update_downloaded', (event, ...args) => func(...args)),

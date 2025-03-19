@@ -4,3 +4,4 @@ node_modules
 startup.log
 build
 dist
+src\loggedMinutes.json

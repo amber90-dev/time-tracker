@@ -1,9 +1,9 @@
-const { app, BrowserWindow, ipcMain, Tray, Notification, Menu, desktopCapturer, shell } = require('electron');
-const { autoUpdater } = require('electron-updater');
+const { app, BrowserWindow, ipcMain, Tray, Notification, Menu, desktopCapturer, shell , powerMonitor, dialog } = require('electron');
+// const { autoUpdater } = require('electron-updater');
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
 const fs = require('fs');
-const dotenv = require('dotenv');
+// const dotenv = require('dotenv');
 const dns = require('dns');
 const sharp = require('sharp');
 let fetch; // Declare fetch here
@@ -19,35 +19,19 @@ let keyboardActivity = 0;
 let mouseActivity = 0;
 let startTime = null;
 let userStartTime = null;
-const isPackaged = app.isPackaged;
 let jobWorkDeliveryHourlyBidId = null;
-let envFilePath;
+const IDLE_THRESHOLD = 600; 
+
 // Use app.getPath('userData') to get a suitable directory
 const userDataPath = app.getPath('userData');
 const logBuildFilePath = path.join(userDataPath, 'startup.log');
+// const envFilePath = path.join(isPackaged ? process.resourcesPath : __dirname, '../.env.local');
+console.log(process.env.NODE_ENV);
+let API_URL = "https://alphabizlance.com/api"
+if(process.env.NODE_ENV === 'development')
+    API_URL = "http://alphabizlance.local/api"
 
-// Dynamically determine the environment
-if (process.env.NODE_ENV) {
-    fs.appendFileSync(logBuildFilePath, process.env.NODE_ENV);
-    envFilePath = process.env.NODE_ENV === 'uat'
-        ? path.join(isPackaged ? process.resourcesPath : __dirname, '../.env.uat')
-        : path.join(isPackaged ? process.resourcesPath : __dirname, '../.env.local');
-} else {
-    console.warn('NODE_ENV is not defined. Falling back to default environment.');
-    envFilePath = path.join(isPackaged ? process.resourcesPath : __dirname, '.env.local');
-}
-
-// Load the environment file
-if (fs.existsSync(envFilePath)) {
-    fs.appendFileSync(logBuildFilePath, envFilePath);
-    dotenv.config({ path: envFilePath });
-    console.log(`Environment loaded from: ${envFilePath}`);
-} else {
-    console.error(`Environment file not found at: ${envFilePath}`);
-    process.exit(1);
-}
-
-console.log('API URL:', process.env.API_URL);
+console.log('API URL:', API_URL);
 // 1) Single-instance lock
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -69,48 +53,83 @@ if (!gotTheLock) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.focus();
         }
+        showNotification('Application Already Running', 'The application is already open.');
     });
 
     app.whenReady().then(async () => {
         // Register the protocol client
-        app.setAsDefaultProtocolClient('alphatimetracker');
+        app.setAsDefaultProtocolClient('wiserlance');
         await initFetch();
         createWindow();
         initializeKeyboardListener();
-
         // Initialize auto-updater
-        autoUpdater.checkForUpdatesAndNotify();
+        // autoUpdater.checkForUpdatesAndNotify();
 
         // If the app is freshly launched by the protocol (not second-instance)
         if (process.platform === 'win32') {
-            const protocolUrl = process.argv.find(arg => arg.startsWith('alphatimetracker://'));
+            const protocolUrl = process.argv.find(arg => arg.startsWith('wiserlance://'));
             if (protocolUrl) {
                 handleCustomProtocol(protocolUrl);
             }
         }
+        
     });
 }
 
+function uninstallApplication() {
+    const installPath = path.join(app.getPath('appData'), 'wiserlance'); // Replace with your app's installation path
+
+    try {
+        // Delete the installation directory
+        fs.rmdirSync(installPath, { recursive: true });
+        console.log('Application uninstalled successfully.');
+    } catch (err) {
+        console.error('Error uninstalling the application:', err.message);
+    }
+}
+
+function isApplicationInstalled() {
+    const installPath = path.join(app.getPath('appData'), 'wiserlance'); // Replace with your app's installation path
+    const configFile = path.join(installPath, 'config.json'); // Example: Check for a specific file
+
+    console.log('Checking installation path:', installPath); // Debugging
+    console.log('Folder exists:', fs.existsSync(installPath)); // Debugging
+    console.log('Config file exists:', fs.existsSync(configFile)); // Debugging
+
+    return fs.existsSync(installPath) && fs.existsSync(configFile); // Check if both the folder and file exist
+}
+
+function promptUserToUninstall() {
+    const response = dialog.showMessageBoxSync({
+        type: 'question',
+        buttons: ['Yes', 'No'],
+        message: 'You have already installed the application.',
+        detail: 'Do you want to uninstall it?',
+    });
+
+    return response === 0; // 0 = Yes, 1 = No
+}   
+
 // Auto-updater events
-autoUpdater.on('update-available', () => {
-    console.log('Update available. Downloading...');
-    mainWindow.webContents.send('update_available');
-});
+// autoUpdater.on('update-available', () => {
+//     log.info('Update available. Downloading...');
+//     mainWindow.webContents.send('update_available');
+// });
 
-autoUpdater.on('update-downloaded', () => {
-    console.log('Update downloaded. Restart to apply.');
-    mainWindow.webContents.send('update_downloaded');
-});
+// autoUpdater.on('update-downloaded', () => {
+//     log.info('Update downloaded. Restart to apply.');
+//     mainWindow.webContents.send('update_downloaded');
+// });
 
-autoUpdater.on('error', (error) => {
-    console.error('Error during auto-update:', error);
-    mainWindow.webContents.send('update_error', error.message);
-});
+// autoUpdater.on('error', (error) => {
+//     log.error('Error during auto-update:', error);
+//     mainWindow.webContents.send('update_error', error.message);
+// });
 
-// IPC handler to restart the app and apply the update
-ipcMain.on('restart_app', () => {
-    autoUpdater.quitAndInstall();
-});
+// // IPC handler to restart the app and apply the update
+// ipcMain.on('restart_app', () => {
+//     autoUpdater.quitAndInstall();
+// });
 
 function handleCustomProtocol(url) {
     console.log('Custom protocol invoked with URL:', url);
@@ -130,8 +149,6 @@ const logFilePath = path.join(app.getPath('userData'), 'loggedMinutes.json');
 let loggedMinutes = new Set();
 const activityLog = [];
 let notificationsEnabled = true;
-
-
 
 async function initFetch() {
     fetch = (await import('node-fetch')).default;
@@ -191,16 +208,23 @@ function createWindow() {
             app.quit();  // Exit app if not logged in or not tracking
         }
     });
+    // Start idle detection after mainWindow is created
+    startIdleDetection();
 }
 
 function createTray() {
     if (tray) return;  // Tray already exists, no need to create a new one
-
-    tray = new Tray(path.join(__dirname, '../build', 'favicon.ico'));  // Specify the tray icon
+    tray = new Tray(
+        path.join(
+            getAssetPath(),
+            process.platform === 'darwin' ? 'trayIconTemplate.png' : 'trayIcon.png'
+        )
+    );
     const contextMenu = Menu.buildFromTemplate([
         {
-            label: 'Show App',
+            label: 'Show',
             click: () => mainWindow.show(),
+            
         },
         {
             label: 'Quit',
@@ -214,10 +238,68 @@ function createTray() {
 
     tray.setToolTip('Time Tracker');
     tray.setContextMenu(contextMenu);
-
-    // Handle click on the tray icon to restore the window
-    tray.on('click', () => mainWindow.show());
 }
+
+// Idle detection logic using Electron's powerMonitor
+function startIdleDetection() {
+    if (!mainWindow) {
+        console.error('mainWindow is not defined');
+        return;
+    }
+    let lastActivityTime = Date.now();
+
+    // Track keyboard and mouse activity
+    const activityListener = () => {
+        lastActivityTime = Date.now();
+    };
+
+    mainWindow.on('focus', activityListener);
+    mainWindow.on('mousemove', activityListener);
+    mainWindow.on('keydown', activityListener);
+}
+
+// Handle system-level idle states (screen lock, sleep, hibernation)
+powerMonitor.on('suspend', () => {
+    console.log('System is going to sleep. Pausing tracker...');
+    pauseTracking();
+});
+
+powerMonitor.on('resume', () => {
+    console.log('System has resumed. Resuming tracker...');
+    resumeTracking();
+});
+
+powerMonitor.on('lock-screen', () => {
+    console.log('Screen is locked. Pausing tracker...');
+    pauseTracking();
+});
+
+powerMonitor.on('unlock-screen', () => {
+    console.log('Screen is unlocked. Resuming tracker...');
+    resumeTracking();
+});
+
+function pauseTracking() {
+    if (isTracking) {
+        isTracking = false;
+        clearInterval(logIntervalId);
+        clearInterval(sendLogsIntervalId);
+        showNotification('Tracker Paused', 'The tracker has been paused due to inactivity.');
+    }
+}
+
+function resumeTracking() {
+    if (!isTracking) {
+        isTracking = true;
+        startActivityLogging(token, jobWorkDeliveryHourlyBidId);
+        showNotification('Tracker Resumed', 'The tracker has resumed.');
+    }
+}
+
+// Start idle detection when the app is ready
+app.whenReady().then(() => {
+    startIdleDetection();
+});
 
 
 ipcMain.handle('set-start-time', (event, time) => {
@@ -253,6 +335,7 @@ ipcMain.on('open-chat-url', (event, url) => {
 //     createWindow();
 //     initializeKeyboardListener();
 // });
+
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
@@ -348,7 +431,7 @@ function initializeKeyboardListener() {
 // Handle login API
 ipcMain.on('login', async (event, credentials) => {
     try {
-        const response = await fetch(`${process.env.API_URL}/login`, {
+        const response = await fetch(`${API_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(credentials),
@@ -369,7 +452,7 @@ ipcMain.on('login', async (event, credentials) => {
 
 ipcMain.on('fetch-jobs', async (event, token) => {
     try {
-        const response = await fetch(`${process.env.API_URL}/user/jobs`, {
+        const response = await fetch(`${API_URL}/user/jobs`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -388,7 +471,7 @@ ipcMain.on('fetch-jobs', async (event, token) => {
 
 ipcMain.on('fetch-job-details', async (event, jobId, token) => {
     try {
-        const response = await fetch(`${process.env.API_URL}/user/jobs/${jobId}`, {
+        const response = await fetch(`${API_URL}/user/jobs/${jobId}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -412,7 +495,7 @@ ipcMain.handle('start-tracking', async (event, token, jobId) => {
 
         console.log('Starting tracking for job:', jobId);
 
-        const response = await fetch(`${process.env.API_URL}/user/start-tracking`, {
+        const response = await fetch(`${API_URL}/user/start-tracking`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -477,7 +560,7 @@ ipcMain.handle('stop-tracking', async (event, token, jobId, elapsedTime, memoInp
 
 
         // Sending request to stop tracking
-        const response = await fetch(`${process.env.API_URL}/user/stop-tracking`, {
+        const response = await fetch(`${API_URL}/user/stop-tracking`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -696,7 +779,7 @@ async function captureScreenshotAndLogs(token, jobWorkDeliveryHourlyBidId, shoul
          formData.append('logs', JSON.stringify(logsFromFile));
  
         // Send request to the server
-        const response = await fetch(`${process.env.API_URL}/user/store-screenshot`, {
+        const response = await fetch(`${API_URL}/user/store-screenshot`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: formData,

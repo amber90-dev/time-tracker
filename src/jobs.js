@@ -1,23 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Listen for update events
-    window.api.onUpdateAvailable(() => {
-        document.getElementById('update-status').innerText = 'Update available. Downloading...';
-    });
-
-    window.api.onUpdateDownloaded(() => {
-        document.getElementById('update-status').innerText = 'Update downloaded. Restart to apply.';
-        const restartButton = document.createElement('button');
-        restartButton.innerText = 'Restart';
-        restartButton.onclick = () => window.api.restartApp();
-        document.getElementById('update-status').appendChild(restartButton);
-    });
-
-    window.api.onUpdateError((error) => {
-        document.getElementById('update-status').innerText = `Update error: ${error}`;
-    });
-
-    // Check for updates when the app starts
-    window.api.checkForUpdates();
+    
     const token = localStorage.getItem('authToken'); // Get token from local storage
     console.log('Auth Token:', token);
     if (token) {
