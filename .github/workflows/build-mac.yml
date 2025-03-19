@@ -25,7 +25,7 @@ jobs:
         run: npm run build:mac
 
       - name: Upload macOS Build Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macOS-app
           path: dist/*.dmg  # Apni build output location ke hisaab se adjust karna
