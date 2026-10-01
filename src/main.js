@@ -1,4 +1,72 @@
-const { app, BrowserWindow, ipcMain, Tray, Notification, Menu, desktopCapturer, shell , powerMonitor, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Notification, Menu, desktopCapturer, shell, powerMonitor, dialog, safeStorage } = require('electron');
+
+// Power & System Idle Monitoring Setup
+if (powerMonitor) {
+    powerMonitor.on('lock-screen', () => {
+        console.log('System locked. Pausing tracking if active.');
+        if (mainWindow && isTracking) {
+            mainWindow.webContents.send('power-event-pause', 'System locked');
+        }
+    });
+
+    powerMonitor.on('suspend', () => {
+        console.log('System suspended. Pausing tracking if active.');
+        if (mainWindow && isTracking) {
+            mainWindow.webContents.send('power-event-pause', 'System suspended');
+        }
+    });
+
+    // Check system idle time periodically
+    setInterval(() => {
+        if (isTracking && mainWindow) {
+            const idleTime = powerMonitor.getSystemIdleTime();
+            if (idleTime >= IDLE_THRESHOLD) {
+                console.log(`User idle for ${idleTime} seconds.`);
+                mainWindow.webContents.send('user-idle-detected', idleTime);
+            }
+        }
+    }, 30000);
+}
+
+// Secure Storage IPC Handlers
+ipcMain.handle('store-token', (event, token) => {
+    try {
+        if (safeStorage && safeStorage.isEncryptionAvailable()) {
+            const encrypted = safeStorage.encryptString(token);
+            fs.writeFileSync(path.join(userDataPath, 'token.enc'), encrypted);
+            return { success: true };
+        }
+    } catch (err) {
+        console.error('Error storing encrypted token:', err);
+    }
+    return { success: false };
+});
+
+ipcMain.handle('get-token', () => {
+    try {
+        const tokenPath = path.join(userDataPath, 'token.enc');
+        if (fs.existsSync(tokenPath) && safeStorage && safeStorage.isEncryptionAvailable()) {
+            const encrypted = fs.readFileSync(tokenPath);
+            return safeStorage.decryptString(encrypted);
+        }
+    } catch (err) {
+        console.error('Error reading encrypted token:', err);
+    }
+    return null;
+});
+
+ipcMain.handle('remove-token', () => {
+    try {
+        const tokenPath = path.join(userDataPath, 'token.enc');
+        if (fs.existsSync(tokenPath)) {
+            fs.unlinkSync(tokenPath);
+        }
+        return { success: true };
+    } catch (err) {
+        console.error('Error removing token file:', err);
+    }
+    return { success: false };
+});
 // const { autoUpdater } = require('electron-updater');
 const { GlobalKeyboardListener } = require('node-global-key-listener');
 const path = require('path');
@@ -146,31 +214,91 @@ app.on('browser-window-blur', () => {
     }, 500);
 });
 
-const logFilePath = path.join(app.getPath('userData'), 'loggedMinutes.json');
+const crypto = require('crypto');
+const logFilePath = path.join(app.getPath('userData'), 'loggedMinutes.enc');
+let activeSessionSecret = null;
+
+function setSessionSecret(secret) {
+    if (secret) {
+        activeSessionSecret = secret;
+        console.log('Active session secret set from login response.');
+    }
+}
+
+function getSecretKey() {
+    const seed = activeSessionSecret || (app.getPath('userData') + 'time_tracker_secure_salt_2026');
+    return crypto.createHash('sha256').update(seed).digest();
+}
+
+function encryptLogData(dataObj) {
+    const jsonStr = JSON.stringify(dataObj);
+    const iv = crypto.randomBytes(16);
+    const secretKey = getSecretKey();
+    const cipher = crypto.createCipheriv('aes-256-cbc', secretKey, iv);
+    let encrypted = cipher.update(jsonStr, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const hmac = crypto.createHmac('sha256', secretKey).update(encrypted).digest('hex');
+    return JSON.stringify({ iv: iv.toString('hex'), data: encrypted, hmac });
+}
+
+function decryptLogData(rawStr) {
+    try {
+        const { iv, data, hmac } = JSON.parse(rawStr);
+        const secretKey = getSecretKey();
+        const expectedHmac = crypto.createHmac('sha256', secretKey).update(data).digest('hex');
+        if (hmac !== expectedHmac) {
+            console.error('TAMPER WARNING: Log file HMAC checksum mismatch! File was manually modified.');
+            return [];
+        }
+        const decipher = crypto.createDecipheriv('aes-256-cbc', secretKey, Buffer.from(iv, 'hex'));
+        let decrypted = decipher.update(data, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return JSON.parse(decrypted);
+    } catch (err) {
+        console.error('Failed to decrypt log file (file tampered or corrupted):', err.message);
+        return [];
+    }
+}
+
+function readLoggedMinutes() {
+    try {
+        if (!fs.existsSync(logFilePath)) {
+            // Backward compatibility: Migration of legacy unencrypted JSON file
+            const oldJsonPath = path.join(app.getPath('userData'), 'loggedMinutes.json');
+            if (fs.existsSync(oldJsonPath)) {
+                const oldData = JSON.parse(fs.readFileSync(oldJsonPath, 'utf8'));
+                writeLoggedMinutes(oldData);
+                fs.unlinkSync(oldJsonPath); // Remove unencrypted file
+                return oldData;
+            }
+            return [];
+        }
+        const raw = fs.readFileSync(logFilePath, 'utf8');
+        return decryptLogData(raw);
+    } catch (err) {
+        console.error('Error reading log file:', err.message);
+        return [];
+    }
+}
+
+function writeLoggedMinutes(loggedMinutes) {
+    try {
+        const tempPath = logFilePath + '.tmp';
+        const payload = encryptLogData(loggedMinutes);
+        fs.writeFileSync(tempPath, payload, 'utf8');
+        fs.renameSync(tempPath, logFilePath); // Atomic overwrite
+        console.log('Secure encrypted logs saved to file successfully.');
+    } catch (err) {
+        console.error('Error writing to encrypted log file:', err.message);
+    }
+}
+
 let loggedMinutes = new Set();
 const activityLog = [];
 let notificationsEnabled = true;
 
 async function initFetch() {
     fetch = (await import('node-fetch')).default;
-}
-
-function readLoggedMinutes() {
-    try {
-        const data = fs.readFileSync(logFilePath, 'utf8');
-        return JSON.parse(data);
-    } catch (err) {
-        return []; // Return empty array if file does not exist or is unreadable
-    }
-}
-
-function writeLoggedMinutes(loggedMinutes) {
-    try {
-        fs.writeFileSync(logFilePath, JSON.stringify(loggedMinutes, null, 2));
-        console.log('Logged to file:', JSON.stringify(loggedMinutes, null, 2));
-    } catch (err) {
-        console.error('Error writing to log file:', err.message);
-    }
 }
 
 // Notifications
@@ -423,7 +551,7 @@ function initializeKeyboardListener() {
     });
 
     mainWindow.webContents.on('before-input-event', (event, input) => {
-        if (isTracking && (input.type === 'mouseDown' || input.type === 'mouseMove')) {
+        if (isTracking && input.type === 'mouseDown') {
             mouseActivity++;
         }
     });
@@ -442,6 +570,9 @@ ipcMain.on('login', async (event, credentials) => {
 
         const data = await response.json();
         const token = data.data.access_token;
+        if (data.data && data.data.session_secret) {
+            setSessionSecret(data.data.session_secret);
+        }
         isLoggedIn = true;
         event.sender.send('login-success', token);
         mainWindow.loadFile('src/views/jobs.html');
