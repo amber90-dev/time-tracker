@@ -1,10 +1,10 @@
 {
-  "name": "wiserlance",
-  "productName": "Wiserlance",
+  "name": "worktrack",
+  "productName": "WorkTrack",
   "version": "0.0.0",
-  "description": "wiserlance",
+  "description": "Cross-platform desktop time tracker for hourly work: tracks active time, idle detection and periodic screenshots, synced to a REST API.",
   "main": "src/main.js",
-  "author": "wiserlance",
+  "author": "Amber Ghulam",
   "scripts": {
     "clean": "rimraf dist",
     "start": "cross-env NODE_ENV=development electron .",
@@ -16,7 +16,7 @@
     "build:all": "electron-builder --win --mac --linux"
   },
   "build": {
-    "appId": "com.wiserlance.timetracker",
+    "appId": "com.amberghulam.worktrack",
    
     "asar": true,
     "icon": "desktopIcon.png",

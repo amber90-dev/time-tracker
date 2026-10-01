@@ -27,9 +27,10 @@ const userDataPath = app.getPath('userData');
 const logBuildFilePath = path.join(userDataPath, 'startup.log');
 // const envFilePath = path.join(isPackaged ? process.resourcesPath : __dirname, '../.env.local');
 console.log(process.env.NODE_ENV);
-let API_URL = "https://titanlance.com/api"
-if(process.env.NODE_ENV === 'development')
-    API_URL = "http://alphabizlance.local/api"
+// Backend API base URL. Set WORKTRACK_API_URL to point the app at your server.
+let API_URL = process.env.WORKTRACK_API_URL || "https://api.example.com/api"
+if (process.env.NODE_ENV === 'development')
+    API_URL = process.env.WORKTRACK_API_URL || "http://localhost:8000/api"
 
 console.log('API URL:', API_URL);
 // 1) Single-instance lock
@@ -58,7 +59,7 @@ if (!gotTheLock) {
 
     app.whenReady().then(async () => {
         // Register the protocol client
-        app.setAsDefaultProtocolClient('wiserlance');
+        app.setAsDefaultProtocolClient('worktrack');
         await initFetch();
         createWindow();
         initializeKeyboardListener();
@@ -67,7 +68,7 @@ if (!gotTheLock) {
 
         // If the app is freshly launched by the protocol (not second-instance)
         if (process.platform === 'win32') {
-            const protocolUrl = process.argv.find(arg => arg.startsWith('wiserlance://'));
+            const protocolUrl = process.argv.find(arg => arg.startsWith('worktrack://'));
             if (protocolUrl) {
                 handleCustomProtocol(protocolUrl);
             }
@@ -77,7 +78,7 @@ if (!gotTheLock) {
 }
 
 function uninstallApplication() {
-    const installPath = path.join(app.getPath('appData'), 'wiserlance'); // Replace with your app's installation path
+    const installPath = path.join(app.getPath('appData'), 'worktrack'); // Replace with your app's installation path
 
     try {
         // Delete the installation directory
@@ -89,7 +90,7 @@ function uninstallApplication() {
 }
 
 function isApplicationInstalled() {
-    const installPath = path.join(app.getPath('appData'), 'wiserlance'); // Replace with your app's installation path
+    const installPath = path.join(app.getPath('appData'), 'worktrack'); // Replace with your app's installation path
     const configFile = path.join(installPath, 'config.json'); // Example: Check for a specific file
 
     console.log('Checking installation path:', installPath); // Debugging
